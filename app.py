@@ -6,17 +6,18 @@ import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
 
-import streamlit as st
+# IMPORTANT: Configure fontconfig BEFORE importing cairosvg (via main)
+# This must happen before any imports that use cairosvg
+fonts_dir = Path(__file__).parent / "fonts"
+os.environ["FONTCONFIG_FILE"] = str(fonts_dir.absolute() / "fonts.conf")
+os.environ["FONTCONFIG_PATH"] = str(fonts_dir.absolute())
 
-from main import generate_card, slugify_name
+import streamlit as st  # noqa: E402
+
+from main import generate_card, slugify_name  # noqa: E402
 
 # Configure page
 st.set_page_config(page_title="Player Card Generator", page_icon="🎮")
-
-# Configure fontconfig to use bundled fonts
-fonts_dir = Path(__file__).parent / "fonts"
-os.environ["FONTCONFIG_FILE"] = str(fonts_dir / "fonts.conf")
-os.environ["FONTCONFIG_PATH"] = str(fonts_dir)
 
 # Verify required template files exist early to fail fast with a clear message
 base_dir = Path(__file__).parent

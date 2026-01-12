@@ -19,9 +19,14 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from xml.sax.saxutils import escape
 
-import cairosvg
-import yaml
-from pypdf import PageObject, PdfReader, PdfWriter
+# Configure fontconfig to use bundled fonts BEFORE importing cairosvg
+fonts_dir = Path(__file__).parent / "fonts"
+os.environ["FONTCONFIG_FILE"] = str(fonts_dir.absolute() / "fonts.conf")
+os.environ["FONTCONFIG_PATH"] = str(fonts_dir.absolute())
+
+import cairosvg  # noqa: E402
+import yaml  # noqa: E402
+from pypdf import PageObject, PdfReader, PdfWriter  # noqa: E402
 
 
 def update_svg_text(
@@ -249,11 +254,6 @@ def main():
         help="Issue date (accepts YYYY-MM-DD, YYYY/MM/DD, MM-DD-YYYY, or MM/DD/YYYY), defaults to today",
     )
     args = parser.parse_args()
-
-    # Configure fontconfig to use bundled fonts
-    fonts_dir = Path(__file__).parent / "fonts"
-    os.environ["FONTCONFIG_FILE"] = str(fonts_dir / "fonts.conf")
-    os.environ["FONTCONFIG_PATH"] = str(fonts_dir)
 
     # Create outputs directory
     output_dir = Path("outputs")
