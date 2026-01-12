@@ -82,8 +82,9 @@ if issue_date_input.strip():
 # Show expiration date preview
 if issue_date_valid and issue_date_obj:
     expiration_date = issue_date_obj + timedelta(weeks=1)
-    st.info(
-        f"Expiration Date: {expiration_date.month}/{expiration_date.day}/{expiration_date.year}"
+    st.markdown(
+        f"<p style='color: gray;'>Expiration Date: {expiration_date.month}/{expiration_date.day}/{expiration_date.year}</p>",
+        unsafe_allow_html=True,
     )
 
 # Enable download button only when all inputs are valid
@@ -116,20 +117,17 @@ def generate_pdf() -> tuple[bytes, str]:
         return pdf_bytes, filename
 
 
-# Download button
+# Generate button
 if all_valid:
-    if st.button(
-        "Generate & Download Player Card", type="primary", use_container_width=True
-    ):
+    if st.button("Generate Player Card", use_container_width=True):
         with st.spinner("Generating PDF..."):
             try:
                 pdf_bytes, filename = generate_pdf()
                 st.download_button(
-                    label="📥 Download Player Card",
+                    label="Download Player Card",
                     data=pdf_bytes,
                     file_name=filename,
                     mime="application/pdf",
-                    type="primary",
                     use_container_width=True,
                 )
                 st.success(f"✓ Generated {filename} successfully!")
@@ -137,8 +135,7 @@ if all_valid:
                 st.error(f"Error generating PDF: {e}")
 else:
     st.button(
-        "Generate & Download Player Card",
-        type="primary",
+        "Generate Player Card",
         disabled=True,
         use_container_width=True,
         help="Please fill in all required fields with valid data",
