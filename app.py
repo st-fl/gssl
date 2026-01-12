@@ -17,7 +17,7 @@ import streamlit as st  # noqa: E402
 from main import generate_card, slugify_name  # noqa: E402
 
 # Configure page
-st.set_page_config(page_title="Player Card Generator", page_icon="🎮")
+st.set_page_config(page_title="Player Card Generator", page_icon="⚽")
 
 # Verify required template files exist early to fail fast with a clear message
 base_dir = Path(__file__).parent
@@ -36,8 +36,7 @@ if not page1_path.is_file() or not page2_path.is_file():
     )
     st.stop()
 
-st.title("🎮 Player Card Generator")
-st.write("Generate a professional player card PDF with automatic expiration date.")
+st.title("⚽ Player Card Generator")
 
 # Input fields
 name = st.text_input("Name *", placeholder="Enter player name")
@@ -84,7 +83,7 @@ if issue_date_input.strip():
 if issue_date_valid and issue_date_obj:
     expiration_date = issue_date_obj + timedelta(weeks=1)
     st.info(
-        f"📅 Expiration Date: {expiration_date.month}/{expiration_date.day}/{expiration_date.year}"
+        f"Expiration Date: {expiration_date.month}/{expiration_date.day}/{expiration_date.year}"
     )
 
 # Enable download button only when all inputs are valid
