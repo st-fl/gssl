@@ -39,3 +39,11 @@ This will:
 - `page1.svg`: Template for the first page with text fields to be updated
 - `page2.pdf`: Static second page (pre-existing)
 - `playercard.pdf`: Generated output (2-page PDF)
+
+## Known Issues
+
+### Font Compatibility
+
+The script currently relies on system fonts when generating PDFs. If Calibri is not available on the system (e.g., on Linux), the generated PDF will use a fallback font, causing visual inconsistencies.
+
+See `plans/2026-01-12-font-compatibility.md` for detailed analysis and solutions.

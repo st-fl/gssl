@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import cairosvg
-from pypdf import PdfWriter
+from pypdf import PageObject, PdfReader, PdfWriter
 
 
 def update_svg_text(
@@ -96,10 +96,42 @@ def main():
         # Convert page1 SVG to PDF
         cairosvg.svg2pdf(url=tmp_svg_path, write_to=tmp_pdf)
 
-        # Merge page1 PDF with page2 PDF
+        # Read both PDFs to get dimensions
+        with open(tmp_pdf, "rb") as f:
+            page1_reader = PdfReader(f)
+            page1 = page1_reader.pages[0]
+            page1_width = float(page1.mediabox.width)
+            page1_height = float(page1.mediabox.height)
+
+        with open("page2.pdf", "rb") as f:
+            page2_reader = PdfReader(f)
+            page2 = page2_reader.pages[0]
+            page2_width = float(page2.mediabox.width)
+
+        # Calculate scale factor to size page2 down to page1
+        scale = page1_width / page2_width
+
+        # Create merged PDF with both pages at page1 size
         merger = PdfWriter()
+
+        # Add page1 as-is
         merger.append(tmp_pdf)
-        merger.append("page2.pdf")
+
+        # Scale page2 down to match page1
+        with open("page2.pdf", "rb") as f:
+            reader = PdfReader(f)
+            page = reader.pages[0]
+
+            # Create new page with page1 dimensions
+            scaled_page = PageObject.create_blank_page(
+                width=page1_width, height=page1_height
+            )
+
+            # Apply transformation to scale page2 down
+            page.scale_by(scale)
+            scaled_page.merge_page(page)
+
+            merger.add_page(scaled_page)
 
         output_pdf = "playercard.pdf"
         merger.write(output_pdf)
