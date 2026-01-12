@@ -3,17 +3,23 @@
 Generate a player card PDF from an SVG template.
 
 Usage:
+    # Single player
     uv run python main.py "John Doe" "1990-01-15"
     uv run python main.py "John Doe" "1990-01-15" "2026-01-12"
+
+    # Batch from YAML file
+    uv run python main.py --batch players.yaml
 """
 
 import argparse
+import os
 import re
 import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
 
 import cairosvg
+import yaml
 from pypdf import PageObject, PdfReader, PdfWriter
 
 
@@ -53,23 +59,15 @@ def update_svg_text(
     return updated_svg
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="Generate player card PDF from SVG template"
-    )
-    parser.add_argument("name", help="Player name")
-    parser.add_argument("dob", help="Date of birth (YYYY-MM-DD)")
-    parser.add_argument(
-        "issue_date", nargs="?", help="Issue date (YYYY-MM-DD), defaults to today"
-    )
-    args = parser.parse_args()
+def slugify_name(name: str) -> str:
+    """Convert player name to a safe filename."""
+    return name.lower().replace(" ", "_").replace("-", "_")
 
-    # Parse issue date (default to today)
-    if args.issue_date:
-        issue_date = datetime.strptime(args.issue_date, "%Y-%m-%d")
-    else:
-        issue_date = datetime.now()
 
+def generate_card(
+    name: str, dob: str, issue_date: datetime, output_dir: Path, fonts_dir: Path
+) -> str:
+    """Generate a player card PDF and return the output path."""
     # Calculate expiration date (1 week from issue date)
     expiration_date = issue_date + timedelta(weeks=1)
 
@@ -83,7 +81,7 @@ def main():
 
     # Update the SVG with new text
     updated_svg = update_svg_text(
-        svg_content, args.name, args.dob, issue_date_str, expiration_date_str
+        svg_content, name, dob, issue_date_str, expiration_date_str
     )
 
     # Write to temporary file and convert to PDF
@@ -133,19 +131,91 @@ def main():
 
             merger.add_page(scaled_page)
 
-        output_pdf = "playercard.pdf"
-        merger.write(output_pdf)
+        # Generate output filename based on player name
+        output_filename = f"{slugify_name(name)}.pdf"
+        output_path = output_dir / output_filename
+
+        merger.write(str(output_path))
         merger.close()
 
-        print(f"✓ Generated {output_pdf}")
-        print(f"  Name: {args.name}")
-        print(f"  DOB: {args.dob}")
+        print(f"✓ Generated {output_path}")
+        print(f"  Name: {name}")
+        print(f"  DOB: {dob}")
         print(f"  Issued: {issue_date_str}")
         print(f"  Expires: {expiration_date_str}")
+
+        return str(output_path)
     finally:
         # Clean up temporary files
         Path(tmp_svg_path).unlink()
         Path(tmp_pdf).unlink(missing_ok=True)
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Generate player card PDF from SVG template"
+    )
+    parser.add_argument(
+        "--batch", help="YAML file with player data for batch generation"
+    )
+    parser.add_argument("name", nargs="?", help="Player name")
+    parser.add_argument("dob", nargs="?", help="Date of birth (YYYY-MM-DD)")
+    parser.add_argument(
+        "issue_date", nargs="?", help="Issue date (YYYY-MM-DD), defaults to today"
+    )
+    args = parser.parse_args()
+
+    # Configure fontconfig to use bundled fonts
+    fonts_dir = Path(__file__).parent / "fonts"
+    os.environ["FONTCONFIG_FILE"] = str(fonts_dir / "fonts.conf")
+    os.environ["FONTCONFIG_PATH"] = str(fonts_dir)
+
+    # Create outputs directory
+    output_dir = Path("outputs")
+    output_dir.mkdir(exist_ok=True)
+
+    if args.batch:
+        # Batch mode: process YAML file
+        with open(args.batch) as f:
+            players = yaml.safe_load(f)
+
+        if not isinstance(players, list):
+            print("Error: YAML file must contain a list of player entries")
+            return
+
+        print(f"Processing {len(players)} players from {args.batch}...\n")
+
+        for player in players:
+            name = player.get("name")
+            dob = player.get("dob")
+            issue_date_str = player.get("issue_date")
+
+            if not name or not dob:
+                print(f"⚠ Skipping entry with missing name or dob: {player}")
+                continue
+
+            # Parse issue date (default to today)
+            if issue_date_str:
+                issue_date = datetime.strptime(issue_date_str, "%Y-%m-%d")
+            else:
+                issue_date = datetime.now()
+
+            generate_card(name, dob, issue_date, output_dir, fonts_dir)
+            print()
+
+        print(f"✓ Batch complete: {len(players)} cards generated in {output_dir}/")
+    else:
+        # Single player mode
+        if not args.name or not args.dob:
+            parser.error("name and dob are required when not using --batch")
+
+        # Parse issue date (default to today)
+        if args.issue_date:
+            issue_date = datetime.strptime(args.issue_date, "%Y-%m-%d")
+        else:
+            issue_date = datetime.now()
+
+        generate_card(args.name, args.dob, issue_date, output_dir, fonts_dir)
 
 
 if __name__ == "__main__":
