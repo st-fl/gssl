@@ -10,6 +10,18 @@ uv sync
 
 ## Usage
 
+### Web Interface (Streamlit)
+
+Run the web application locally:
+
+```bash
+uv run streamlit run app.py
+```
+
+This will start the Streamlit server at http://localhost:8501 with a user-friendly interface for generating player cards.
+
+### Command Line Interface
+
 Generate a player card with name and date of birth (issue date defaults to today):
 
 ```bash
@@ -39,6 +51,29 @@ This will:
 - `page1.svg`: Template for the first page with text fields to be updated
 - `page2.pdf`: Static second page (pre-existing)
 - `playercard.pdf`: Generated output (2-page PDF)
+
+## Deployment
+
+### Streamlit Cloud
+
+To deploy this application on Streamlit Cloud:
+
+1. **Prerequisites:**
+   - Ensure your repository is on GitHub
+   - The repository must be public or you must connect Streamlit Cloud to your GitHub account
+
+2. **Deploy:**
+   - Go to [share.streamlit.io](https://share.streamlit.io)
+   - Sign in with your GitHub account
+   - Click "New app"
+   - Select your repository, branch (usually `main` or `master`), and set the main file path to `app.py`
+   - Click "Deploy"
+
+3. **Requirements:**
+   - `requirements.txt` is included for Streamlit Cloud to install dependencies
+   - `fonts/` directory and `page1.svg` + `page2.pdf` must be committed to the repository
+
+The app will be available at a public URL after deployment completes (typically 2-3 minutes).
 
 ## Known Issues
 

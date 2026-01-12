@@ -17,6 +17,7 @@ import re
 import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
+from xml.sax.saxutils import escape
 
 import cairosvg
 import yaml
@@ -26,15 +27,25 @@ from pypdf import PageObject, PdfReader, PdfWriter
 def update_svg_text(
     svg_content: str, name: str, dob: str, issue_date: str, expiration_date: str
 ) -> str:
-    """Update text elements in SVG by their id."""
+    """Update text elements in SVG by their id.
+
+    Escapes user input to prevent XML injection and validates that all
+    required field IDs are found in the SVG.
+
+    Raises:
+        ValueError: If any required field id is not found in the SVG.
+    """
+    # Escape user input to prevent XML injection
     replacements = {
-        "NameField": name,
-        "DOBField": dob,
-        "IssuedDate": issue_date,
-        "ExpirationDate": expiration_date,
+        "NameField": escape(name),
+        "DOBField": escape(dob),
+        "IssuedDate": escape(issue_date),
+        "ExpirationDate": escape(expiration_date),
     }
 
     updated_svg = svg_content
+    missing_ids: list[str] = []
+
     for field_id, new_text in replacements.items():
         # Try multiple patterns to match different SVG text structures
         patterns = [
@@ -46,15 +57,25 @@ def update_svg_text(
             rf"(<text[^>]*id='{field_id}'[^>]*>)([^<]*)(</text>)",
         ]
 
+        replaced = False
         for pattern in patterns:
-            match = re.search(pattern, updated_svg)
-            if match:
-                updated_svg = re.sub(
-                    pattern,
-                    lambda m: f"{m.group(1)}{new_text}{m.group(3)}",
-                    updated_svg,
-                )
+            new_svg, count = re.subn(
+                pattern,
+                lambda m: f"{m.group(1)}{new_text}{m.group(3)}",
+                updated_svg,
+            )
+            if count > 0:
+                updated_svg = new_svg
+                replaced = True
                 break
+
+        if not replaced:
+            missing_ids.append(field_id)
+
+    if missing_ids:
+        raise ValueError(
+            f"Missing expected SVG text element id(s): {', '.join(missing_ids)}"
+        )
 
     return updated_svg
 
@@ -91,27 +112,39 @@ def parse_date(date_input: str | datetime) -> datetime:
 
 
 def slugify_name(name: str) -> str:
-    """Convert player name to a safe filename."""
-    return name.lower().replace(" ", "_").replace("-", "_")
+    """Convert player name to a safe filename.
+
+    Non-alphanumeric characters are replaced with underscores, and the result
+    is lowercased. Falls back to "card" if the slug becomes empty.
+    """
+    # Replace any non-alphanumeric character with underscore
+    slug = re.sub(r"[^a-zA-Z0-9]+", "_", name).strip("_").lower()
+    if not slug:
+        slug = "card"
+    return slug
 
 
-def generate_card(
-    name: str, dob: str, issue_date: datetime, output_dir: Path, fonts_dir: Path
-) -> str:
+def generate_card(name: str, dob: str, issue_date: datetime, output_dir: Path) -> str:
     """Generate a player card PDF and return the output path."""
-    # Parse and format DOB
+    # Parse and format DOB (without leading zeroes)
     dob_date = parse_date(dob)
-    dob_formatted = dob_date.strftime("%m/%d/%Y")
+    dob_formatted = f"{dob_date.month}/{dob_date.day}/{dob_date.year}"
 
     # Calculate expiration date (1 week from issue date)
     expiration_date = issue_date + timedelta(weeks=1)
 
-    # Format dates as MM/DD/YYYY
-    issue_date_str = issue_date.strftime("%m/%d/%Y")
-    expiration_date_str = expiration_date.strftime("%m/%d/%Y")
+    # Format dates without leading zeroes (M/D/YYYY)
+    issue_date_str = f"{issue_date.month}/{issue_date.day}/{issue_date.year}"
+    expiration_date_str = (
+        f"{expiration_date.month}/{expiration_date.day}/{expiration_date.year}"
+    )
+
+    # Use __file__-relative paths instead of CWD
+    base_dir = Path(__file__).parent
+    svg_path = base_dir / "page1.svg"
+    page2_path = base_dir / "page2.pdf"
 
     # Read the SVG template for page 1
-    svg_path = Path("page1.svg")
     svg_content = svg_path.read_text()
 
     # Update the SVG with new text
@@ -119,24 +152,33 @@ def generate_card(
         svg_content, name, dob_formatted, issue_date_str, expiration_date_str
     )
 
-    # Write to temporary file and convert to PDF
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".svg", delete=False) as tmp_svg:
-        tmp_svg.write(updated_svg)
-        tmp_svg_path = tmp_svg.name
+    # Initialize temporary file paths
+    tmp_svg_path = None
+    tmp_pdf_path = None
 
-    tmp_pdf = tempfile.mktemp(suffix=".pdf")
     try:
+        # Write to temporary file and convert to PDF
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".svg", delete=False
+        ) as tmp_svg:
+            tmp_svg.write(updated_svg)
+            tmp_svg_path = tmp_svg.name
+
+        # Create secure temporary file for PDF
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp_pdf:
+            tmp_pdf_path = tmp_pdf.name
+
         # Convert page1 SVG to PDF
-        cairosvg.svg2pdf(url=tmp_svg_path, write_to=tmp_pdf)
+        cairosvg.svg2pdf(url=tmp_svg_path, write_to=tmp_pdf_path)
 
         # Read both PDFs to get dimensions
-        with open(tmp_pdf, "rb") as f:
+        with open(tmp_pdf_path, "rb") as f:
             page1_reader = PdfReader(f)
             page1 = page1_reader.pages[0]
             page1_width = float(page1.mediabox.width)
             page1_height = float(page1.mediabox.height)
 
-        with open("page2.pdf", "rb") as f:
+        with open(page2_path, "rb") as f:
             page2_reader = PdfReader(f)
             page2 = page2_reader.pages[0]
             page2_width = float(page2.mediabox.width)
@@ -148,10 +190,10 @@ def generate_card(
         merger = PdfWriter()
 
         # Add page1 as-is
-        merger.append(tmp_pdf)
+        merger.append(tmp_pdf_path)
 
         # Scale page2 down to match page1
-        with open("page2.pdf", "rb") as f:
+        with open(page2_path, "rb") as f:
             reader = PdfReader(f)
             page = reader.pages[0]
 
@@ -181,9 +223,11 @@ def generate_card(
 
         return str(output_path)
     finally:
-        # Clean up temporary files
-        Path(tmp_svg_path).unlink()
-        Path(tmp_pdf).unlink(missing_ok=True)
+        # Clean up temporary files, handling error paths properly
+        if tmp_svg_path is not None:
+            Path(tmp_svg_path).unlink(missing_ok=True)
+        if tmp_pdf_path is not None:
+            Path(tmp_pdf_path).unlink(missing_ok=True)
 
 
 def main():
@@ -241,7 +285,7 @@ def main():
             else:
                 issue_date = datetime.now()
 
-            generate_card(name, dob, issue_date, output_dir, fonts_dir)
+            generate_card(name, dob, issue_date, output_dir)
             print()
 
         print(f"✓ Batch complete: {len(players)} cards generated in {output_dir}/")
@@ -256,7 +300,7 @@ def main():
         else:
             issue_date = datetime.now()
 
-        generate_card(args.name, args.dob, issue_date, output_dir, fonts_dir)
+        generate_card(args.name, args.dob, issue_date, output_dir)
 
 
 if __name__ == "__main__":

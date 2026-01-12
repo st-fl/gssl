@@ -1,0 +1,6 @@
+cairosvg>=2.7.0
+pypdf>=5.1.0
+pyright>=1.1.408
+pyyaml>=6.0.0
+ruff>=0.14.11
+streamlit>=1.30.0

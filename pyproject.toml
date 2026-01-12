@@ -10,4 +10,5 @@ dependencies = [
     "pyright>=1.1.408",
     "pyyaml>=6.0.0",
     "ruff>=0.14.11",
+    "streamlit>=1.30.0",
 ]
