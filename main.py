@@ -3,9 +3,9 @@
 Generate a player card PDF from an SVG template.
 
 Usage:
-    # Single player
+    # Single player (dates can be YYYY-MM-DD, YYYY/MM/DD, MM-DD-YYYY, or MM/DD/YYYY)
     uv run python main.py "John Doe" "1990-01-15"
-    uv run python main.py "John Doe" "1990-01-15" "2026-01-12"
+    uv run python main.py "John Doe" "01/15/1990" "01/12/2026"
 
     # Batch from YAML file
     uv run python main.py --batch players.yaml
@@ -59,6 +59,37 @@ def update_svg_text(
     return updated_svg
 
 
+def parse_date(date_input: str | datetime) -> datetime:
+    """Parse date string in multiple formats: YYYY-MM-DD, YYYY/MM/DD, MM-DD-YYYY, MM/DD/YYYY."""
+    # If already a datetime object, return it
+    if isinstance(date_input, datetime):
+        return date_input
+
+    # If it's a date object (from YAML parsing), convert to datetime
+    from datetime import date
+
+    if isinstance(date_input, date):
+        return datetime.combine(date_input, datetime.min.time())
+
+    # Otherwise, parse the string
+    formats = [
+        "%Y-%m-%d",  # YYYY-MM-DD
+        "%Y/%m/%d",  # YYYY/MM/DD
+        "%m-%d-%Y",  # MM-DD-YYYY
+        "%m/%d/%Y",  # MM/DD/YYYY
+    ]
+
+    for fmt in formats:
+        try:
+            return datetime.strptime(date_input, fmt)
+        except ValueError:
+            continue
+
+    raise ValueError(
+        f"Unable to parse date '{date_input}'. Expected formats: YYYY-MM-DD, YYYY/MM/DD, MM-DD-YYYY, or MM/DD/YYYY"
+    )
+
+
 def slugify_name(name: str) -> str:
     """Convert player name to a safe filename."""
     return name.lower().replace(" ", "_").replace("-", "_")
@@ -68,12 +99,16 @@ def generate_card(
     name: str, dob: str, issue_date: datetime, output_dir: Path, fonts_dir: Path
 ) -> str:
     """Generate a player card PDF and return the output path."""
+    # Parse and format DOB
+    dob_date = parse_date(dob)
+    dob_formatted = dob_date.strftime("%m/%d/%Y")
+
     # Calculate expiration date (1 week from issue date)
     expiration_date = issue_date + timedelta(weeks=1)
 
-    # Format dates
-    issue_date_str = issue_date.strftime("%Y-%m-%d")
-    expiration_date_str = expiration_date.strftime("%Y-%m-%d")
+    # Format dates as MM/DD/YYYY
+    issue_date_str = issue_date.strftime("%m/%d/%Y")
+    expiration_date_str = expiration_date.strftime("%m/%d/%Y")
 
     # Read the SVG template for page 1
     svg_path = Path("page1.svg")
@@ -81,7 +116,7 @@ def generate_card(
 
     # Update the SVG with new text
     updated_svg = update_svg_text(
-        svg_content, name, dob, issue_date_str, expiration_date_str
+        svg_content, name, dob_formatted, issue_date_str, expiration_date_str
     )
 
     # Write to temporary file and convert to PDF
@@ -140,7 +175,7 @@ def generate_card(
 
         print(f"✓ Generated {output_path}")
         print(f"  Name: {name}")
-        print(f"  DOB: {dob}")
+        print(f"  DOB: {dob_formatted}")
         print(f"  Issued: {issue_date_str}")
         print(f"  Expires: {expiration_date_str}")
 
@@ -159,9 +194,15 @@ def main():
         "--batch", help="YAML file with player data for batch generation"
     )
     parser.add_argument("name", nargs="?", help="Player name")
-    parser.add_argument("dob", nargs="?", help="Date of birth (YYYY-MM-DD)")
     parser.add_argument(
-        "issue_date", nargs="?", help="Issue date (YYYY-MM-DD), defaults to today"
+        "dob",
+        nargs="?",
+        help="Date of birth (accepts YYYY-MM-DD, YYYY/MM/DD, MM-DD-YYYY, or MM/DD/YYYY)",
+    )
+    parser.add_argument(
+        "issue_date",
+        nargs="?",
+        help="Issue date (accepts YYYY-MM-DD, YYYY/MM/DD, MM-DD-YYYY, or MM/DD/YYYY), defaults to today",
     )
     args = parser.parse_args()
 
@@ -196,7 +237,7 @@ def main():
 
             # Parse issue date (default to today)
             if issue_date_str:
-                issue_date = datetime.strptime(issue_date_str, "%Y-%m-%d")
+                issue_date = parse_date(issue_date_str)
             else:
                 issue_date = datetime.now()
 
@@ -211,7 +252,7 @@ def main():
 
         # Parse issue date (default to today)
         if args.issue_date:
-            issue_date = datetime.strptime(args.issue_date, "%Y-%m-%d")
+            issue_date = parse_date(args.issue_date)
         else:
             issue_date = datetime.now()
 
